@@ -1,0 +1,89 @@
+pipeline:
+  name: Full-CI-CD-K8s
+  identifier: Full_CI_CD_K8s
+  projectIdentifier: DevOps_AI_Project
+  orgIdentifier: default
+  stages:
+    - stage:
+        name: Build-and-Test
+        identifier: Build_and_Test
+        type: CI
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Clone Code
+                  identifier: Clone_Code
+                  type: GitClone
+                  spec:
+                    repoName: kubernetes-projects
+                    connectorRef: github_connector
+                    repoUrl: https://github.com/raghav-ssh/kubernetes-projects
+              - step:
+                  name: Run Tests
+                  identifier: Run_Tests
+                  type: RunTests
+                  spec:
+                    framework: JUnit
+                    language: Java
+              - step:
+                  name: Build & Push Docker Image
+                  identifier: Build_Push_Image
+                  type: BuildAndPushDockerRegistry
+                  spec:
+                    connectorRef: dockerhub_connector
+                    imageName: your-org/your-app
+                    tags:
+                      - latest
+
+    - stage:
+        name: Canary-Deploy
+        identifier: Canary_Deploy
+        type: Deployment
+        spec:
+          service:
+            serviceRef: your-service
+          environment:
+            environmentRef: your-k8s-environment
+          infrastructure:
+            infrastructureDefinition:
+              type: KubernetesDirect
+              spec:
+                connectorRef: k8s_cluster_connector
+                namespace: default
+          deploymentType: Kubernetes
+          execution:
+            steps:
+              - step:
+                  name: Canary Deployment
+                  identifier: Canary_Deployment
+                  type: K8sCanaryDeploy
+                  spec:
+                    instanceSelection:
+                      type: Count
+                      spec:
+                        count: 1
+              - step:
+                  name: Verify Canary (AI)
+                  identifier: Verify_Canary
+                  type: Verify
+                  spec:
+                    type: Prometheus
+                    spec:
+                      metricDefinitions:
+                        - metricName: error_rate
+                          riskProfile:
+                            category: Errors
+                            thresholdTypes:
+                              - ACT_WHEN_HIGHER
+                          analysis:
+                            liveMonitoring: true
+                            deploymentVerification: true
+              - step:
+                  name: Promote Canary
+                  identifier: Promote_Canary
+                  type: K8sCanaryDelete
+                  spec: {}
+
+  rollback:
+    enabled: true
